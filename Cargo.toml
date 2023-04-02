@@ -1,0 +1,24 @@
+[package]
+name = "traefik_crowdsec_bouncer"
+version = "0.2.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "4"
+actix-rt = "2"
+chrono = { version = "0.4", features = ["time"] }
+custom_error = "1.9"
+env_logger = "0.10"
+ip_network_table-deps-treebitmap = "0.5"
+log = "0.4"
+parse_duration = "2"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+url = "2.3"
+
+[dev-dependencies]
+mockito = "1.0.2"
+tokio = { version = "1", features = ["full"] }
