@@ -73,7 +73,7 @@ pub async fn authenticate(
                 let req_ip = Ipv4Addr::from_str(&req_ip_str);
                 match req_ip {
                     Ok(ip) => {
-                        if ipv4_table.exact_match(ip, 32).is_some() {
+                        if ipv4_table.longest_match(ip).is_some() {
                             forbidden_response(Some(req_ip_str))
                         } else {
                             allowed_response(Some(req_ip_str))

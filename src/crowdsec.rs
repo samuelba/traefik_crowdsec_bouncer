@@ -11,7 +11,7 @@ use ip_network_table_deps_treebitmap::IpLookupTable;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::errors::{CrowdSecApiError};
+use crate::errors::CrowdSecApiError;
 use crate::types::{CacheAttributes, HealthStatus};
 use crate::utils::get_ip_and_subnet;
 
