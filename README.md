@@ -55,10 +55,11 @@ services:
       - STREAM_UPDATE_INTERVAL=5
       # The cache expiration time in seconds. Only needed in "live" mode.
       - LIVE_CACHE_EXPIRATION=5
+      # The port the service should listen on. Default is 8080.
+      - PORT=8080
 ```
 
 ## Roadmap
 
 * [ ] Add support for log level.
 * [ ] Add support for trusted proxies.
-* [ ] Add support for different server listening port.

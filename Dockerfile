@@ -21,9 +21,7 @@ COPY --from=builder --chown=nonroot:nonroot /traefik_crowdsec_bouncer/target/rel
 COPY --from=samuelba/healthcheck:latest --chown=nonroot:nonroot /app/healthcheck /app/healthcheck
 USER nonroot
 WORKDIR /app
-EXPOSE 9090
 
-ENV PORT=9090
 ENV API_PATH=api/v1/health
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s CMD ["/app/healthcheck"]
 
