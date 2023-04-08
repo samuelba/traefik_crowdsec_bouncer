@@ -23,6 +23,8 @@ pub struct Config {
     pub crowdsec_cache_ttl: i64,
     /// The CrowdSec stream update interval in seconds.
     pub stream_interval: u64,
+    /// The listening port.
+    pub port: u16,
 }
 
 /// Read the configuration from the environment variables.
@@ -34,8 +36,9 @@ pub fn read_config() -> Config {
         crowdsec_stream_url: String::new(),
         crowdsec_api_key: String::new(),
         crowdsec_mode: CrowdSecMode::Stream,
-        crowdsec_cache_ttl: 5000,
+        crowdsec_cache_ttl: 0,
         stream_interval: 0,
+        port: 8080,
     };
 
     // Get the CrowdSec mode.
@@ -97,6 +100,12 @@ pub fn read_config() -> Config {
             config.crowdsec_cache_ttl = 0;
         }
     }
+
+    // Get the listening port.
+    config.port = match env::var("PORT") {
+        Ok(val) => val.parse::<u16>().unwrap_or(config.port),
+        Err(_) => config.port,
+    };
 
     config
 }

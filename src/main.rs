@@ -63,6 +63,7 @@ async fn main() -> io::Result<()> {
 
     // API.
     info!("Starting HTTP server (API).");
+    let port = config.port;
     HttpServer::new(move || {
         App::new()
             // Enable the logger - always register actix-web Logger middleware last.
@@ -77,7 +78,7 @@ async fn main() -> io::Result<()> {
             .service(bouncer::block_list)
             .service(bouncer::health)
     })
-    .bind("0.0.0.0:9090")?
+    .bind(format!("0.0.0.0:{}", port))?
     .run()
     .await
 }
