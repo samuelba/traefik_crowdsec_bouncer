@@ -9,3 +9,8 @@ custom_error! {
     ResponseParsingFailed{error: String} = "CrowdSec response parsing failed. Error: {error}",
     UrlParsingFailed{error: ParseError} = "CrowdSec url parsing failed. Error: {error}",
 }
+
+custom_error! {
+    pub TraefikError
+    BadHeaders = "Bad Forward-Request headers.",
+}

@@ -44,7 +44,7 @@ async fn main() -> io::Result<()> {
             info!("Starting CrowdSec stream update.");
             // Update the IP tables from CrowdSec stream.
             actix_rt::spawn(async move {
-                crowdsec::stream(
+                crowdsec::stream_loop_thread(
                     config_clone,
                     health_status_clone,
                     ipv4_table_clone,

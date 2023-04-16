@@ -15,7 +15,15 @@ use parse_duration::parse;
 use crate::config::{Config, CrowdSecMode};
 use crate::constants::{APPLICATION_JSON, TEXT_PLAIN};
 use crate::crowdsec::get_decision;
+use crate::errors::TraefikError;
 use crate::types::{CacheAttributes, HealthStatus};
+
+#[cfg(test)]
+mod tests;
+
+pub struct TraefikHeaders {
+    ip: String,
+}
 
 fn forbidden_response(ip: Option<String>) -> HttpResponse {
     if let Some(ip) = ip {
@@ -39,6 +47,162 @@ fn set_health_status(health_status: Arc<Mutex<HealthStatus>>, healthy: bool) {
     }
 }
 
+fn extract_headers(request: &HttpRequest) -> Result<TraefikHeaders, TraefikError> {
+    let ip = if let Some(ip) = request.headers().get("X-Forwarded-For") {
+        if let Ok(ip) = ip.to_str() {
+            ip.to_string()
+        } else {
+            return Err(TraefikError::BadHeaders);
+        }
+    } else {
+        return Err(TraefikError::BadHeaders);
+    };
+
+    Ok(TraefikHeaders { ip })
+}
+
+pub async fn authenticate_stream_mode(
+    headers: TraefikHeaders,
+    ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
+) -> HttpResponse {
+    if let Ok(ipv4_table) = ipv4_data.lock() {
+        let req_ip = Ipv4Addr::from_str(&headers.ip);
+        match req_ip {
+            Ok(ip) => {
+                if ipv4_table.longest_match(ip).is_some() {
+                    forbidden_response(Some(headers.ip))
+                } else {
+                    allowed_response(Some(headers.ip))
+                }
+            }
+            Err(_) => forbidden_response(Some(headers.ip)),
+        }
+    } else {
+        warn!("Could not lock the IPv4 lookup table. Block request.");
+        forbidden_response(Some(headers.ip))
+    }
+}
+
+pub async fn authenticate_live_mode(
+    headers: TraefikHeaders,
+    config: Data<Config>,
+    health_status: Data<Arc<Mutex<HealthStatus>>>,
+    ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
+) -> HttpResponse {
+    let req_ip = Ipv4Addr::from_str(&headers.ip);
+    match req_ip {
+        Ok(ip) => {
+            // Check if IP is in cache.
+            // If yes, check if it is expired.
+            // If not, return the cached value.
+            if let Ok(ipv4_table) = ipv4_data.lock() {
+                if let Some(cache_attributes) = ipv4_table.exact_match(ip, 32) {
+                    if cache_attributes.expiration_time > chrono::Utc::now().timestamp_millis() {
+                        return if cache_attributes.allowed {
+                            allowed_response(Some(headers.ip))
+                        } else {
+                            forbidden_response(Some(headers.ip))
+                        };
+                    }
+                }
+            }
+
+            // IP not in cache or expired.
+            // Call CrowdSec API.
+            // Update cache.
+            return match get_decision(
+                &config.crowdsec_live_url,
+                &config.crowdsec_api_key,
+                &headers.ip,
+            )
+            .await
+            {
+                Ok(decision) => {
+                    set_health_status(health_status.get_ref().clone(), true);
+                    match decision {
+                        Some(decision) => {
+                            // If the decisions duration is smaller than the cache TTL, use it instead.
+                            let ttl = if let Ok(duration) = parse(&decision.duration) {
+                                min(duration.as_millis() as i64, config.crowdsec_cache_ttl)
+                            } else {
+                                config.crowdsec_cache_ttl
+                            };
+
+                            // Update cache.
+                            if let Ok(mut ipv4_table) = ipv4_data.lock() {
+                                ipv4_table.insert(
+                                    ip,
+                                    32,
+                                    CacheAttributes {
+                                        allowed: false,
+                                        expiration_time: chrono::Utc::now().timestamp_millis()
+                                            + ttl,
+                                    },
+                                );
+                            }
+                            forbidden_response(Some(headers.ip))
+                        }
+                        None => {
+                            // Update cache.
+                            if let Ok(mut ipv4_table) = ipv4_data.lock() {
+                                ipv4_table.insert(
+                                    ip,
+                                    32,
+                                    CacheAttributes {
+                                        allowed: true,
+                                        expiration_time: chrono::Utc::now().timestamp_millis()
+                                            + config.crowdsec_cache_ttl,
+                                    },
+                                );
+                            }
+                            allowed_response(Some(headers.ip))
+                        }
+                    }
+                }
+                Err(err) => {
+                    info!(
+                        "Could not call API. IP: {} is not allowed. Error {}",
+                        headers.ip, err
+                    );
+                    set_health_status(health_status.get_ref().clone(), false);
+                    forbidden_response(None)
+                }
+            };
+        }
+        Err(_) => forbidden_response(Some(headers.ip)),
+    }
+}
+
+pub async fn authenticate_none_mode(
+    headers: TraefikHeaders,
+    config: Data<Config>,
+    health_status: Data<Arc<Mutex<HealthStatus>>>,
+) -> HttpResponse {
+    match get_decision(
+        &config.crowdsec_live_url,
+        &config.crowdsec_api_key,
+        &headers.ip,
+    )
+    .await
+    {
+        Ok(decision) => {
+            set_health_status(health_status.get_ref().clone(), true);
+            match decision {
+                Some(_) => forbidden_response(Some(headers.ip)),
+                None => allowed_response(Some(headers.ip)),
+            }
+        }
+        Err(err) => {
+            info!(
+                "Could not call API. IP: {} is not allowed. Error {}",
+                headers.ip, err
+            );
+            set_health_status(health_status.get_ref().clone(), false);
+            forbidden_response(None)
+        }
+    }
+}
+
 /// Authenticate an IP address.
 /// # Arguments
 /// * `config` - The configuration.
@@ -54,151 +218,23 @@ pub async fn authenticate(
     ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
     request: HttpRequest,
 ) -> HttpResponse {
-    // Get the IP address from the X-Forwarded-For header.
-    let req_ip_str = if let Some(header_value) = request.headers().get("X-Forwarded-For") {
-        if let Ok(header_value) = header_value.to_str() {
-            header_value.to_string()
-        } else {
-            warn!("Could not convert 'X-Forwarded-For' to string. Block request.");
+    let headers = match extract_headers(&request) {
+        Ok(header) => header,
+        Err(err) => {
+            warn!(
+                "Could not get headers from request. Block request. Error: {}",
+                err
+            );
             return forbidden_response(None);
         }
-    } else {
-        warn!("No 'X-Forwarded-For' in the request header. Block request.");
-        return forbidden_response(None);
     };
 
     match config.crowdsec_mode {
-        CrowdSecMode::Stream => {
-            return if let Ok(ipv4_table) = ipv4_data.lock() {
-                let req_ip = Ipv4Addr::from_str(&req_ip_str);
-                match req_ip {
-                    Ok(ip) => {
-                        if ipv4_table.longest_match(ip).is_some() {
-                            forbidden_response(Some(req_ip_str))
-                        } else {
-                            allowed_response(Some(req_ip_str))
-                        }
-                    }
-                    Err(_) => forbidden_response(Some(req_ip_str)),
-                }
-            } else {
-                warn!("Could not lock the IPv4 lookup table. Block request.");
-                forbidden_response(Some(req_ip_str))
-            }
-        }
+        CrowdSecMode::Stream => authenticate_stream_mode(headers, ipv4_data).await,
         CrowdSecMode::Live => {
-            let req_ip = Ipv4Addr::from_str(&req_ip_str);
-            match req_ip {
-                Ok(ip) => {
-                    // Check if IP is in cache.
-                    // If yes, check if it is expired.
-                    // If not, return the cached value.
-                    if let Ok(ipv4_table) = ipv4_data.lock() {
-                        if let Some(cache_attributes) = ipv4_table.exact_match(ip, 32) {
-                            if cache_attributes.expiration_time
-                                > chrono::Utc::now().timestamp_millis()
-                            {
-                                return if cache_attributes.allowed {
-                                    allowed_response(Some(req_ip_str))
-                                } else {
-                                    forbidden_response(Some(req_ip_str))
-                                };
-                            }
-                        }
-                    }
-
-                    // IP not in cache or expired.
-                    // Call CrowdSec API.
-                    // Update cache.
-                    return match get_decision(
-                        &config.crowdsec_live_url,
-                        &config.crowdsec_api_key,
-                        &req_ip_str,
-                    )
-                    .await
-                    {
-                        Ok(decision) => {
-                            set_health_status(health_status.get_ref().clone(), true);
-                            match decision {
-                                Some(decision) => {
-                                    // If the decisions duration is smaller than the cache TTL, use it instead.
-                                    let ttl = if let Ok(duration) = parse(&decision.duration) {
-                                        min(duration.as_millis() as i64, config.crowdsec_cache_ttl)
-                                    } else {
-                                        config.crowdsec_cache_ttl
-                                    };
-
-                                    // Update cache.
-                                    if let Ok(mut ipv4_table) = ipv4_data.lock() {
-                                        ipv4_table.insert(
-                                            ip,
-                                            32,
-                                            CacheAttributes {
-                                                allowed: false,
-                                                expiration_time: chrono::Utc::now()
-                                                    .timestamp_millis()
-                                                    + ttl,
-                                            },
-                                        );
-                                    }
-                                    forbidden_response(Some(req_ip_str))
-                                }
-                                None => {
-                                    // Update cache.
-                                    if let Ok(mut ipv4_table) = ipv4_data.lock() {
-                                        ipv4_table.insert(
-                                            ip,
-                                            32,
-                                            CacheAttributes {
-                                                allowed: true,
-                                                expiration_time: chrono::Utc::now()
-                                                    .timestamp_millis()
-                                                    + config.crowdsec_cache_ttl,
-                                            },
-                                        );
-                                    }
-                                    allowed_response(Some(req_ip_str))
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            info!(
-                                "Could not call API. IP: {} is not allowed. Error {}",
-                                req_ip_str, err
-                            );
-                            set_health_status(health_status.get_ref().clone(), false);
-                            forbidden_response(None)
-                        }
-                    };
-                }
-                Err(_) => forbidden_response(Some(req_ip_str)),
-            }
+            authenticate_live_mode(headers, config, health_status, ipv4_data).await
         }
-        CrowdSecMode::None => {
-            match get_decision(
-                &config.crowdsec_live_url,
-                &config.crowdsec_api_key,
-                &req_ip_str,
-            )
-            .await
-            {
-                Ok(decision) => {
-                    set_health_status(health_status.get_ref().clone(), true);
-                    match decision {
-                        Some(_) => forbidden_response(Some(req_ip_str)),
-                        None => allowed_response(Some(req_ip_str)),
-                    }
-                }
-                Err(err) => {
-                    info!(
-                        "Could not call API. IP: {} is not allowed. Error {}",
-                        req_ip_str, err
-                    );
-                    set_health_status(health_status.get_ref().clone(), false);
-                    forbidden_response(None)
-                }
-            }
-        }
+        CrowdSecMode::None => authenticate_none_mode(headers, config, health_status).await,
     }
 }
 
