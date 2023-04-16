@@ -144,6 +144,97 @@ async fn get_decisions_stream(
     })
 }
 
+/// Call the CrowdSec decisions stream API to get the new and deleted decisions.
+/// # Arguments
+/// * `config` - The configuration.
+/// * `health_status` - The health status.
+/// * `ipv4_table` - The IPv4 table.
+/// * `ipv6_table` - The IPv6 table.
+/// * `startup` - If `true`, the API will return all the decisions, otherwise it will only return the new decisions.
+async fn update_decisions(
+    config: Config,
+    health_status: Arc<Mutex<HealthStatus>>,
+    ipv4_table: Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>,
+    ipv6_table: Arc<Mutex<IpLookupTable<Ipv6Addr, CacheAttributes>>>,
+    startup: &mut bool,
+) {
+    match get_decisions_stream(
+        &config.crowdsec_stream_url,
+        &config.crowdsec_api_key,
+        *startup,
+    )
+    .await
+    {
+        Ok(stream) => {
+            set_health_status(health_status.clone(), true);
+            if stream.new.is_none() && stream.deleted.is_none() {
+                return;
+            }
+            info!("Decisions stream: {:?}", stream);
+
+            if let Some(ref new) = stream.new {
+                for decision in new {
+                    let range = get_ip_and_subnet(&decision.value);
+                    match range {
+                        Some(range) => match range.ipv4 {
+                            Some(ipv4) => {
+                                if let Ok(mut table) = ipv4_table.lock() {
+                                    table.insert(
+                                        ipv4,
+                                        range.subnet.unwrap_or(32),
+                                        CacheAttributes::new(false, 0),
+                                    );
+                                }
+                            }
+                            None => match range.ipv6 {
+                                Some(ipv6) => {
+                                    if let Ok(mut table) = ipv6_table.lock() {
+                                        table.insert(
+                                            ipv6,
+                                            range.subnet.unwrap_or(128),
+                                            CacheAttributes::new(false, 0),
+                                        );
+                                    }
+                                }
+                                None => warn!("Invalid IP (in new): {:?}", decision.value),
+                            },
+                        },
+                        None => warn!("Invalid IP (in new): {:?}", decision.value),
+                    }
+                }
+            }
+            if let Some(ref deleted) = stream.deleted {
+                for decision in deleted {
+                    let range = get_ip_and_subnet(&decision.value);
+                    match range {
+                        Some(range) => match range.ipv4 {
+                            Some(ipv4) => {
+                                if let Ok(mut table) = ipv4_table.lock() {
+                                    table.remove(ipv4, range.subnet.unwrap_or(32));
+                                }
+                            }
+                            None => match range.ipv6 {
+                                Some(ipv6) => {
+                                    if let Ok(mut table) = ipv6_table.lock() {
+                                        table.remove(ipv6, range.subnet.unwrap_or(128));
+                                    }
+                                }
+                                None => warn!("Invalid IP (in deleted): {:?}", decision.value),
+                            },
+                        },
+                        None => warn!("Invalid IP (in deleted): {:?}", decision.value),
+                    }
+                }
+            }
+            *startup = false;
+        }
+        Err(err) => {
+            error!("Could not call API. Error: {}", err);
+            set_health_status(health_status.clone(), false);
+        }
+    }
+}
+
 /// The main function.
 /// Updates the IP lookup tables with the new and deleted decisions at a regular interval.
 /// # Arguments
@@ -151,7 +242,7 @@ async fn get_decisions_stream(
 /// * `health_status` - The health status.
 /// * `ipv4_table` - The IPv4 lookup table.
 /// * `ipv6_table` - The IPv6 lookup table.
-pub async fn stream(
+pub async fn stream_loop_thread(
     config: Config,
     health_status: Arc<Mutex<HealthStatus>>,
     ipv4_table: Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>,
@@ -162,85 +253,13 @@ pub async fn stream(
     loop {
         interval.tick().await;
 
-        // let mut ipv4_table_tmp = ipv4_table.lock().unwrap();
-        // warn!("Initial insert");
-        // ipv4_table_tmp.insert(Ipv4Addr::new(1, 2, 3, 4), 32, true);
-        // continue;
-
-        match get_decisions_stream(
-            &config.crowdsec_stream_url,
-            &config.crowdsec_api_key,
-            startup,
+        update_decisions(
+            config.clone(),
+            health_status.clone(),
+            ipv4_table.clone(),
+            ipv6_table.clone(),
+            &mut startup,
         )
-        .await
-        {
-            Ok(stream) => {
-                set_health_status(health_status.clone(), true);
-                if stream.new.is_none() && stream.deleted.is_none() {
-                    continue;
-                }
-                info!("Decisions stream: {:?}", stream);
-
-                if let Some(ref new) = stream.new {
-                    for decision in new {
-                        let range = get_ip_and_subnet(&decision.value);
-                        match range {
-                            Some(range) => match range.ipv4 {
-                                Some(ipv4) => {
-                                    if let Ok(mut table) = ipv4_table.lock() {
-                                        table.insert(
-                                            ipv4,
-                                            range.subnet.unwrap_or(32),
-                                            CacheAttributes::new(false, 0),
-                                        );
-                                    }
-                                }
-                                None => match range.ipv6 {
-                                    Some(ipv6) => {
-                                        if let Ok(mut table) = ipv6_table.lock() {
-                                            table.insert(
-                                                ipv6,
-                                                range.subnet.unwrap_or(128),
-                                                CacheAttributes::new(false, 0),
-                                            );
-                                        }
-                                    }
-                                    None => warn!("Invalid IP (in new): {:?}", decision.value),
-                                },
-                            },
-                            None => warn!("Invalid IP (in new): {:?}", decision.value),
-                        }
-                    }
-                }
-                if let Some(ref deleted) = stream.deleted {
-                    for decision in deleted {
-                        let range = get_ip_and_subnet(&decision.value);
-                        match range {
-                            Some(range) => match range.ipv4 {
-                                Some(ipv4) => {
-                                    if let Ok(mut table) = ipv4_table.lock() {
-                                        table.remove(ipv4, range.subnet.unwrap_or(32));
-                                    }
-                                }
-                                None => match range.ipv6 {
-                                    Some(ipv6) => {
-                                        if let Ok(mut table) = ipv6_table.lock() {
-                                            table.remove(ipv6, range.subnet.unwrap_or(128));
-                                        }
-                                    }
-                                    None => warn!("Invalid IP (in deleted): {:?}", decision.value),
-                                },
-                            },
-                            None => warn!("Invalid IP (in deleted): {:?}", decision.value),
-                        }
-                    }
-                }
-                startup = false;
-            }
-            Err(err) => {
-                error!("Could not call API. Error: {}", err);
-                set_health_status(health_status.clone(), false);
-            }
-        }
+        .await;
     }
 }
