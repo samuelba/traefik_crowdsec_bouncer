@@ -87,7 +87,7 @@ async fn test_get_decision_banned_ip() {
             "value": "1.2.3.4"
         }
     ]);
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions")
         .match_header("X-Api-Key", api_key)
@@ -117,7 +117,7 @@ async fn test_get_decision_unbanned_ip() {
 
     // Simulate an unbanned IP address.
     let mock_response = "null";
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions")
         .match_header("X-Api-Key", api_key)
@@ -125,7 +125,8 @@ async fn test_get_decision_unbanned_ip() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(mock_response)
-        .create();
+        .create_async()
+        .await;
 
     let url = server.url() + "/v1/decisions";
     let result = get_decision(&url, api_key, ip).await.unwrap();
@@ -143,13 +144,14 @@ async fn test_get_decision_bad_response() {
     let ip = "1.2.3.4";
 
     // Simulate a bad response from the API.
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions")
         .match_header("X-Api-Key", api_key)
         .match_query(format!("ip={}&type=ban", ip).as_str())
         .with_status(400)
-        .create();
+        .create_async()
+        .await;
 
     // Get the decision.
     let url = server.url() + "/v1/decisions";
@@ -172,7 +174,7 @@ async fn test_get_decisions_stream_startup() {
     let startup = true;
 
     // Simulate a stream of decisions.
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions/stream")
         .match_header("X-Api-Key", api_key)
@@ -180,7 +182,8 @@ async fn test_get_decisions_stream_startup() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(MOCK_RESPONSE_1)
-        .create();
+        .create_async()
+        .await;
 
     // Get the decision stream.
     let url = server.url() + "/v1/decisions/stream";
@@ -206,7 +209,7 @@ async fn test_update_decisions() {
     let api_key = "my_api_key";
 
     // Simulate a stream of decisions.
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions/stream")
         .match_header("X-Api-Key", api_key)
@@ -214,7 +217,8 @@ async fn test_update_decisions() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(MOCK_RESPONSE_1)
-        .create();
+        .create_async()
+        .await;
 
     // Set up test data
     let config = Config {
@@ -263,7 +267,8 @@ async fn test_update_decisions() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(MOCK_RESPONSE_2)
-        .create();
+        .create_async()
+        .await;
 
     update_decisions(
         config.clone(),

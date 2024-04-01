@@ -176,7 +176,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
 
     // Simulate an allowed IP address.
     let mock_response = "null";
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions")
         .match_header("X-Api-Key", api_key)
@@ -292,7 +292,7 @@ async fn test_authenticate_none_mode() {
 
     // Simulate an allowed IP address.
     let mock_response = "null";
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let mock_server = server
         .mock("GET", "/v1/decisions")
         .match_header("X-Api-Key", api_key)
