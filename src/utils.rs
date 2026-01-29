@@ -21,10 +21,10 @@ pub struct Address {
 pub fn get_ip_and_subnet(ip: &str) -> Option<Address> {
     fn try_to_convert_to_ipv4(ip: &str, subnet: Option<u32>) -> Option<Address> {
         let addr = ip.parse::<Ipv4Addr>().ok()?;
-        if let Some(subnet) = subnet {
-            if subnet > 32 {
-                return None;
-            }
+        if let Some(subnet) = subnet
+            && subnet > 32
+        {
+            return None;
         }
         Some(Address {
             ipv4: Some(addr),
@@ -35,10 +35,10 @@ pub fn get_ip_and_subnet(ip: &str) -> Option<Address> {
 
     fn try_to_convert_to_ipv6(ip: &str, subnet: Option<u32>) -> Option<Address> {
         let addr = ip.parse::<Ipv6Addr>().ok()?;
-        if let Some(subnet) = subnet {
-            if subnet > 128 {
-                return None;
-            }
+        if let Some(subnet) = subnet
+            && subnet > 128
+        {
+            return None;
         }
         Some(Address {
             ipv4: None,
