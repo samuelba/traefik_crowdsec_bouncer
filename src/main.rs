@@ -7,7 +7,7 @@ use std::{env, io};
 
 use log::info;
 
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{App, HttpServer, middleware, web};
 
 use crate::types::HealthStatus;
 use ip_network_table_deps_treebitmap::IpLookupTable;
@@ -24,7 +24,9 @@ use crate::types::CacheAttributes;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "info,actix_web=info,actix_server=info");
+    unsafe {
+        env::set_var("RUST_LOG", "info,actix_web=info,actix_server=info");
+    }
     env_logger::init();
     info!("Starting Bouncer.");
 
