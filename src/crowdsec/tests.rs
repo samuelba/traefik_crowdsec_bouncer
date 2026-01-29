@@ -247,12 +247,16 @@ async fn test_update_decisions() {
     // Check the result.
     if let Ok(ipv4_table) = ipv4_table.lock() {
         assert_eq!(2, ipv4_table.len());
-        assert!(ipv4_table
-            .exact_match(Ipv4Addr::new(1, 2, 3, 4), 32)
-            .is_some());
-        assert!(ipv4_table
-            .exact_match(Ipv4Addr::new(1, 1, 0, 0), 22)
-            .is_some());
+        assert!(
+            ipv4_table
+                .exact_match(Ipv4Addr::new(1, 2, 3, 4), 32)
+                .is_some()
+        );
+        assert!(
+            ipv4_table
+                .exact_match(Ipv4Addr::new(1, 1, 0, 0), 22)
+                .is_some()
+        );
     } else {
         panic!("Expected an IPv4 table.");
     }
@@ -282,15 +286,21 @@ async fn test_update_decisions() {
     // Check the result.
     if let Ok(ipv4_table) = ipv4_table.lock() {
         assert_eq!(2, ipv4_table.len());
-        assert!(ipv4_table
-            .exact_match(Ipv4Addr::new(1, 2, 3, 4), 32)
-            .is_some());
-        assert!(ipv4_table
-            .exact_match(Ipv4Addr::new(1, 1, 0, 0), 22)
-            .is_none());
-        assert!(ipv4_table
-            .exact_match(Ipv4Addr::new(2, 2, 0, 0), 16)
-            .is_some());
+        assert!(
+            ipv4_table
+                .exact_match(Ipv4Addr::new(1, 2, 3, 4), 32)
+                .is_some()
+        );
+        assert!(
+            ipv4_table
+                .exact_match(Ipv4Addr::new(1, 1, 0, 0), 22)
+                .is_none()
+        );
+        assert!(
+            ipv4_table
+                .exact_match(Ipv4Addr::new(2, 2, 0, 0), 16)
+                .is_some()
+        );
     } else {
         panic!("Expected an IPv4 table.");
     }

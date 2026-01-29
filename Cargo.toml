@@ -1,23 +1,23 @@
 [package]
 name = "traefik_crowdsec_bouncer"
 version = "0.2.3"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = { version = "4.5" }
-actix-rt = { version = "2.9" }
+actix-web = { version = "4.12" }
+actix-rt = { version = "2.11" }
 chrono = { version = "0.4", features = ["time"] }
 custom_error = { version = "1.9" }
 env_logger = { version = "0.11" }
 ip_network_table-deps-treebitmap = { version = "0.5" }
 log = { version = "0.4" }
 parse_duration = { version = "2.1" }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 url = { version = "2.5" }
 
 [dev-dependencies]
-mockito = { version = "1.4" }
+mockito = { version = "1.7" }

@@ -95,16 +95,15 @@ pub async fn authenticate_live_mode(
             // Check if IP is in cache.
             // If yes, check if it is expired.
             // If not, return the cached value.
-            if let Ok(ipv4_table) = ipv4_data.lock() {
-                if let Some(cache_attributes) = ipv4_table.exact_match(ip, 32) {
-                    if cache_attributes.expiration_time > chrono::Utc::now().timestamp_millis() {
-                        return if cache_attributes.allowed {
-                            allowed_response(Some(headers.ip))
-                        } else {
-                            forbidden_response(Some(headers.ip))
-                        };
-                    }
-                }
+            if let Ok(ipv4_table) = ipv4_data.lock()
+                && let Some(cache_attributes) = ipv4_table.exact_match(ip, 32)
+                && cache_attributes.expiration_time > chrono::Utc::now().timestamp_millis()
+            {
+                return if cache_attributes.allowed {
+                    allowed_response(Some(headers.ip))
+                } else {
+                    forbidden_response(Some(headers.ip))
+                };
             }
 
             // IP not in cache or expired.
@@ -281,10 +280,10 @@ pub async fn block_list(
 /// * `HttpResponse` - The HTTP response.
 #[get("/api/v1/health")]
 pub async fn health(health_status: Data<Arc<Mutex<HealthStatus>>>) -> HttpResponse {
-    if let Ok(health_status) = health_status.lock() {
-        if health_status.healthy() {
-            return HttpResponse::Ok().content_type(TEXT_PLAIN).body("OK");
-        }
+    if let Ok(health_status) = health_status.lock()
+        && health_status.healthy()
+    {
+        return HttpResponse::Ok().content_type(TEXT_PLAIN).body("OK");
     }
     HttpResponse::ServiceUnavailable()
         .content_type(TEXT_PLAIN)

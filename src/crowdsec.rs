@@ -98,10 +98,10 @@ pub async fn get_decision(
         if text == "null" {
             return Ok(None);
         }
-        if let Ok(decision) = serde_json::from_str::<Vec<Decision>>(&text) {
-            if !decision.is_empty() {
-                return Ok(Some(decision[0].clone()));
-            }
+        if let Ok(decision) = serde_json::from_str::<Vec<Decision>>(&text)
+            && !decision.is_empty()
+        {
+            return Ok(Some(decision[0].clone()));
         }
     }
     Err(CrowdSecApiError::ResponseParsingFailed {
