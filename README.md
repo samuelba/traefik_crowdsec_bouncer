@@ -24,8 +24,6 @@ The mode can be configured with the `CROWDSEC_MODE` environment variable.
 Example `docker-compose.yml` file
 
 ```yaml
-version: '3.7'
-
 services:
   traefik-crowdsec-bouncer:
     # Build the image locally.
@@ -57,6 +55,51 @@ services:
       - LIVE_CACHE_EXPIRATION=5
       # The port the service should listen on. Default is 8080.
       - PORT=8080
+```
+
+## Configuration
+
+The service can be configured with the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CROWDSEC_API_KEY` | The CrowdSec API key. | |
+| `CROWDSEC_HOST` | The CrowdSec API host. | |
+| `CROWDSEC_HTTPS` | Call CrowdSec API over HTTPS (true) or HTTP (false). | false |
+| `CROWDSEC_MODE` | The mode to verify the IP address. Can be either "stream", "live" or "none". | stream |
+| `STREAM_UPDATE_INTERVAL` | The interval in seconds to fetch the list of blocked IP addresses from the CrowdSec API. Only needed in "stream" mode. | 0 |
+| `LIVE_CACHE_EXPIRATION` | The cache expiration time in seconds. Only needed in "live" mode. | 0 |
+| `PORT` | The port the service should listen on. | 8080 |
+
+## Token Generation
+
+To generate a token for the bouncer, you can use the `cscli` command line tool on your CrowdSec instance.
+
+```bash
+docker exec -it crowdsec cscli bouncers add traefik-crowdsec-bouncer
+```
+
+## API Endpoints
+
+The service exposes the following API endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/forwardAuth` | The main authentication endpoint. It checks if the IP address is blocked or not. |
+| GET | `/api/v1/blockList` | Returns the list of blocked IP addresses. Only available in "stream" mode. |
+| GET | `/api/v1/health` | The health check endpoint. It returns 200 OK if the service is healthy. |
+
+## Traefik Dynamic Configuration
+
+To configure the bouncer as a middleware in Traefik, you can use the following dynamic configuration:
+
+```yaml
+http:
+  middlewares:
+    crowdsec-bouncer:
+      forwardAuth:
+        address: http://traefik-crowdsec-bouncers:8080/api/v1/forwardAuth
+        trustForwardHeader: true
 ```
 
 ## Roadmap
