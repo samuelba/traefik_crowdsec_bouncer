@@ -25,6 +25,8 @@ pub struct Config {
     pub stream_interval: u64,
     /// The listening port.
     pub port: u16,
+    /// The trusted proxies.
+    pub trusted_proxies: Vec<ipnetwork::IpNetwork>,
 }
 
 /// Read the configuration from the environment variables.
@@ -39,6 +41,7 @@ pub fn read_config() -> Config {
         crowdsec_cache_ttl: 0,
         stream_interval: 0,
         port: 8080,
+        trusted_proxies: Vec::new(),
     };
 
     // Get the CrowdSec mode.
@@ -106,6 +109,19 @@ pub fn read_config() -> Config {
         Ok(val) => val.parse::<u16>().unwrap_or(config.port),
         Err(_) => config.port,
     };
+
+    // Get the trusted proxies.
+    let trusted_proxies_str =
+        env::var("CROWDSEC_TRUSTED_PROXIES").unwrap_or_else(|_| String::new());
+    config.trusted_proxies = trusted_proxies_str
+        .split(',')
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| {
+            s.trim()
+                .parse()
+                .expect("Invalid CIDR in CROWDSEC_TRUSTED_PROXIES")
+        })
+        .collect();
 
     config
 }

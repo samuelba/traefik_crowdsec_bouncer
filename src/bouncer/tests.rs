@@ -7,8 +7,18 @@ async fn test_extract_headers() {
         .insert_header(header::ContentType::plaintext())
         .insert_header(("X-Forwarded-For", "192.168.0.1"))
         .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
 
-    let headers = extract_headers(&req).unwrap();
+    let headers = extract_headers(&req, &config).unwrap();
     assert_eq!("192.168.0.1", headers.ip);
 }
 
@@ -17,8 +27,18 @@ async fn test_extract_headers_missing_headers() {
     let req = test::TestRequest::default()
         .insert_header(header::ContentType::plaintext())
         .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
 
-    assert!(extract_headers(&req).is_err());
+    assert!(extract_headers(&req, &config).is_err());
 }
 
 #[test]
@@ -30,8 +50,144 @@ async fn test_extract_headers_invalid_headers() {
             header::HeaderValue::from_bytes(b"\xFF").unwrap(),
         ))
         .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
 
-    assert!(extract_headers(&req).is_err());
+    assert!(extract_headers(&req, &config).is_err());
+}
+
+#[test]
+async fn test_extract_headers_multiple_ips() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "1.2.3.4, 5.6.7.8"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    // No trusted proxies, so we take the "untrusted" one from the right, which is the last one (5.6.7.8)
+    // Wait, if no trusted proxies, the logic says:
+    // Iterate rev: 5.6.7.8. Trusted? No. Break. client_ip = 5.6.7.8.
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("5.6.7.8", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_multiple_ips_with_spaces() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "1.2.3.4,  5.6.7.8"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("5.6.7.8", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_trusted_proxy() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "1.2.3.4, 10.0.0.1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec!["10.0.0.1/32".parse().unwrap()],
+    };
+
+    // 10.0.0.1 is trusted. Logic:
+    // 1. 10.0.0.1 -> Trusted? Yes. Continue.
+    // 2. 1.2.3.4 -> Trusted? No. Break. client_ip = 1.2.3.4.
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("1.2.3.4", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_garbage_in_chain() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "1.2.3.4, not_an_ip, 10.0.0.1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec!["10.0.0.1/32".parse().unwrap()],
+    };
+
+    // 10.0.0.1 is trusted.
+    // not_an_ip is NOT trusted (invalid). Stop.
+    // Result: not_an_ip.
+    // This will cause the bouncer to forbid the request (fail closed).
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("not_an_ip", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_all_trusted_proxies() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "203.0.113.1, 192.168.1.1, 10.0.0.1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![
+            "203.0.113.0/24".parse().unwrap(),
+            "192.168.1.0/24".parse().unwrap(),
+            "10.0.0.0/24".parse().unwrap(),
+        ],
+    };
+
+    // All IPs are trusted proxies.
+    // Logic should iterate right-to-left:
+    // 1. 10.0.0.1 -> Trusted? Yes. Continue.
+    // 2. 192.168.1.1 -> Trusted? Yes. Continue.
+    // 3. 203.0.113.1 -> Trusted? Yes. Continue.
+    // Loop completes without finding untrusted IP.
+    // Result: client_ip should be the leftmost IP (203.0.113.1), the original client.
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("203.0.113.1", headers.ip);
 }
 
 #[test]
@@ -95,6 +251,7 @@ async fn test_authenticate_live_mode_from_cache() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     });
     let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
         live_status: true,
@@ -195,6 +352,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     });
 
     // Allowed IP.
@@ -259,6 +417,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     });
 
     // Blocked IP.
@@ -311,6 +470,7 @@ async fn test_authenticate_none_mode() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     });
 
     // Allowed IP.
@@ -355,6 +515,7 @@ async fn test_authenticate_none_mode() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     });
 
     // Blocked IP.

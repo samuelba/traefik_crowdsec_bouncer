@@ -47,10 +47,33 @@ fn set_health_status(health_status: Arc<Mutex<HealthStatus>>, healthy: bool) {
     }
 }
 
-fn extract_headers(request: &HttpRequest) -> Result<TraefikHeaders, TraefikError> {
+fn extract_headers(request: &HttpRequest, config: &Config) -> Result<TraefikHeaders, TraefikError> {
     let ip = if let Some(ip) = request.headers().get("X-Forwarded-For") {
         if let Ok(ip) = ip.to_str() {
-            ip.to_string()
+            let ips: Vec<&str> = ip.split(',').map(|s| s.trim()).collect();
+            let mut client_ip = ips.first().unwrap_or(&"");
+
+            for ip_str in ips.iter().rev() {
+                match ip_str.parse::<std::net::IpAddr>() {
+                    Ok(addr) => {
+                        let is_trusted = config
+                            .trusted_proxies
+                            .iter()
+                            .any(|cidr| cidr.contains(addr));
+                        if !is_trusted {
+                            client_ip = ip_str;
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        // Unparseable IP: cannot verify trust, so treat as untrusted client IP and stop scanning.
+                        // This prevents malformed entries from being skipped in favor of potentially spoofed IPs further left.
+                        client_ip = ip_str;
+                        break;
+                    }
+                }
+            }
+            client_ip.to_string()
         } else {
             return Err(TraefikError::BadHeaders);
         }
@@ -217,7 +240,7 @@ pub async fn authenticate(
     ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
     request: HttpRequest,
 ) -> HttpResponse {
-    let headers = match extract_headers(&request) {
+    let headers = match extract_headers(&request, &config) {
         Ok(header) => header,
         Err(err) => {
             warn!(

@@ -229,6 +229,7 @@ async fn test_update_decisions() {
         crowdsec_cache_ttl: 0,
         stream_interval: 0,
         port: 0,
+        trusted_proxies: vec![],
     };
     let health_status = Arc::new(Mutex::new(HealthStatus::new()));
     let ipv4_table = Arc::new(Mutex::new(IpLookupTable::new()));
