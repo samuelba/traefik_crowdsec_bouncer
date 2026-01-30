@@ -1,5 +1,6 @@
 use super::*;
 use actix_web::{http::header, test};
+use std::str::FromStr;
 
 #[test]
 async fn test_extract_headers() {
@@ -204,6 +205,7 @@ async fn test_authenticate_stream_mode() {
         CacheAttributes::new(false, 0),
     );
     let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::new())));
 
     assert_eq!(
         200,
@@ -212,6 +214,7 @@ async fn test_authenticate_stream_mode() {
                 ip: "1.1.1.1".to_string(),
             },
             ipv4_data.clone(),
+            ipv6_data.clone(),
         )
         .await
         .status()
@@ -223,6 +226,7 @@ async fn test_authenticate_stream_mode() {
                 ip: "172.16.5.5".to_string(),
             },
             ipv4_data.clone(),
+            ipv6_data.clone(),
         )
         .await
         .status()
@@ -234,6 +238,7 @@ async fn test_authenticate_stream_mode() {
                 ip: "192.168.0.1".to_string(),
             },
             ipv4_data.clone(),
+            ipv6_data.clone(),
         )
         .await
         .status()
@@ -259,6 +264,10 @@ async fn test_authenticate_live_mode_from_cache() {
     })));
     let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
         Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
         CacheAttributes,
     >::new())));
     if let Ok(mut ipv4_table) = ipv4_data.lock() {
@@ -288,6 +297,7 @@ async fn test_authenticate_live_mode_from_cache() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(200, response.status());
@@ -300,6 +310,7 @@ async fn test_authenticate_live_mode_from_cache() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(403, response.status());
@@ -314,6 +325,10 @@ async fn test_authenticate_live_mode_from_api_allowed() {
     })));
     let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
         Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
         CacheAttributes,
     >::new())));
     // Add an expired (blocked) entry to the cache.
@@ -361,6 +376,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(200, response.status());
@@ -426,6 +442,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(403, response.status());
@@ -542,6 +559,10 @@ async fn test_authenticate_live_mode_caches_range() {
         Ipv4Addr,
         CacheAttributes,
     >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
 
     let api_key = "my_api_key";
     let ip_check = "10.0.0.1";
@@ -591,6 +612,7 @@ async fn test_authenticate_live_mode_caches_range() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(403, response.status());
@@ -616,6 +638,7 @@ async fn test_authenticate_live_mode_caches_range() {
         config.clone(),
         health_status.clone(),
         ipv4_data.clone(),
+        ipv6_data.clone(),
     )
     .await;
     assert_eq!(403, response.status());
@@ -629,5 +652,511 @@ async fn test_authenticate_live_mode_caches_range() {
     }
 
     // Verify the mock was only called once
+    mock_server.assert();
+}
+
+// ============================================================================
+// IPv6 Tests
+// ============================================================================
+
+#[test]
+async fn test_extract_headers_ipv6_single() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "2001:db8::1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("2001:db8::1", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_ipv6_multiple() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "2001:db8::1, 2001:db8::2"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    // No trusted proxies, so we take the rightmost (last untrusted) IP
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("2001:db8::2", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_ipv6_with_trusted_proxy() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "2001:db8::1, 2001:db8:abcd::1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec!["2001:db8:abcd::/48".parse().unwrap()],
+    };
+
+    // 2001:db8:abcd::1 is trusted, so we get 2001:db8::1 as the client IP
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("2001:db8::1", headers.ip);
+}
+
+#[test]
+async fn test_extract_headers_mixed_ipv4_ipv6() {
+    let req = test::TestRequest::default()
+        .insert_header(header::ContentType::plaintext())
+        .insert_header(("X-Forwarded-For", "192.168.1.1, 2001:db8::1"))
+        .to_http_request();
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 0,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    // No trusted proxies, so we get the rightmost IP
+    let headers = extract_headers(&req, &config).unwrap();
+    assert_eq!("2001:db8::1", headers.ip);
+}
+
+#[test]
+async fn test_authenticate_stream_mode_ipv6() {
+    let mut ipv6_table = IpLookupTable::new();
+    ipv6_table.insert(
+        Ipv6Addr::from_str("2001:db8::").unwrap(),
+        32,
+        CacheAttributes::new(false, 0),
+    );
+    ipv6_table.insert(
+        Ipv6Addr::from_str("fe80::1").unwrap(),
+        128,
+        CacheAttributes::new(false, 0),
+    );
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
+
+    // Allowed IPv6
+    assert_eq!(
+        200,
+        authenticate_stream_mode(
+            TraefikHeaders {
+                ip: "2001:db9::1".to_string(),
+            },
+            ipv4_data.clone(),
+            ipv6_data.clone(),
+        )
+        .await
+        .status()
+    );
+
+    // Forbidden IPv6 (in range)
+    assert_eq!(
+        403,
+        authenticate_stream_mode(
+            TraefikHeaders {
+                ip: "2001:db8::5".to_string(),
+            },
+            ipv4_data.clone(),
+            ipv6_data.clone(),
+        )
+        .await
+        .status()
+    );
+
+    // Forbidden IPv6 (exact match)
+    assert_eq!(
+        403,
+        authenticate_stream_mode(
+            TraefikHeaders {
+                ip: "fe80::1".to_string(),
+            },
+            ipv4_data.clone(),
+            ipv6_data.clone(),
+        )
+        .await
+        .status()
+    );
+}
+
+#[test]
+async fn test_authenticate_live_mode_ipv6_from_cache() {
+    let config = Data::new(Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+    let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    })));
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    // Add cached IPv6 entries
+    if let Ok(mut ipv6_table) = ipv6_data.lock() {
+        ipv6_table.insert(
+            Ipv6Addr::from_str("2001:db8::1").unwrap(),
+            128,
+            CacheAttributes {
+                allowed: true,
+                expiration_time: chrono::Utc::now().timestamp_millis() + 60000,
+            },
+        );
+        ipv6_table.insert(
+            Ipv6Addr::from_str("2001:db8::2").unwrap(),
+            128,
+            CacheAttributes {
+                allowed: false,
+                expiration_time: chrono::Utc::now().timestamp_millis() + 60000,
+            },
+        );
+    }
+
+    // Allowed IPv6
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: "2001:db8::1".to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(200, response.status());
+
+    // Forbidden IPv6
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: "2001:db8::2".to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+}
+
+#[test]
+async fn test_authenticate_live_mode_ipv6_from_api() {
+    let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    })));
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    let api_key = "my_api_key";
+    let ip = "2001:db8::1";
+
+    // Simulate an allowed IPv6 address
+    let mock_response = "null";
+    let mut server = mockito::Server::new_async().await;
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip.replace(':', "%3A")).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response)
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    // Allowed IPv6
+    let response = authenticate_live_mode(
+        TraefikHeaders { ip: ip.to_string() },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(200, response.status());
+
+    // Verify it was cached as allowed
+    if let Ok(ipv6_table) = ipv6_data.lock() {
+        let res = ipv6_table.exact_match(Ipv6Addr::from_str("2001:db8::1").unwrap(), 128);
+        assert!(res.is_some());
+        assert!(res.unwrap().allowed);
+    }
+
+    mock_server.assert();
+
+    // Test forbidden IPv6
+    let ip = "2001:db8::bad";
+    let mock_response = serde_json::json!([
+        {
+            "duration": "24h",
+            "id": 1,
+            "origin": "CAPI",
+            "scenario": "test",
+            "scope": "Ip",
+            "type": "ban",
+            "value": ip
+        }
+    ]);
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip.replace(':', "%3A")).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response.to_string())
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    let response = authenticate_live_mode(
+        TraefikHeaders { ip: ip.to_string() },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
+    // Verify it was cached as forbidden
+    if let Ok(ipv6_table) = ipv6_data.lock() {
+        let res = ipv6_table.exact_match(Ipv6Addr::from_str("2001:db8::bad").unwrap(), 128);
+        assert!(res.is_some());
+        assert!(!res.unwrap().allowed);
+    }
+
+    mock_server.assert();
+}
+
+#[test]
+async fn test_authenticate_live_mode_ipv6_caches_range() {
+    let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    })));
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    let api_key = "my_api_key";
+    let ip_check = "2001:db8:abcd::1";
+    let ip_range = "2001:db8:abcd::/48";
+
+    // Simulate a forbidden IPv6 address range
+    let mock_response = serde_json::json!([
+        {
+            "duration": "24h",
+            "id": 1,
+            "origin": "CAPI",
+            "scenario": "test",
+            "scope": "Range",
+            "type": "ban",
+            "value": ip_range
+        }
+    ]);
+
+    let mut server = mockito::Server::new_async().await;
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip_check.replace(':', "%3A")).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response.to_string())
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    // Request for 2001:db8:abcd::1, should trigger API call and cache 2001:db8:abcd::/48
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: ip_check.to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
+    mock_server.assert();
+
+    // Verify Cache contains the range
+    if let Ok(ipv6_table) = ipv6_data.lock() {
+        let res = ipv6_table.longest_match(Ipv6Addr::from_str("2001:db8:abcd::ffff").unwrap());
+        assert!(res.is_some(), "Should find a match for 2001:db8:abcd::ffff");
+        let (addr, mask, attr) = res.unwrap();
+        assert_eq!(addr, Ipv6Addr::from_str("2001:db8:abcd::").unwrap());
+        assert_eq!(mask, 48);
+        assert_eq!(attr.allowed, false);
+    }
+}
+
+#[test]
+async fn test_authenticate_none_mode_ipv6() {
+    let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    })));
+    let api_key = "my_api_key";
+    let ip = "2001:db8::1";
+
+    // Simulate an allowed IPv6 address
+    let mock_response = "null";
+    let mut server = mockito::Server::new_async().await;
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip.replace(':', "%3A")).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response)
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    // Allowed IPv6
+    let response = authenticate_none_mode(
+        TraefikHeaders { ip: ip.to_string() },
+        config.clone(),
+        health_status.clone(),
+    )
+    .await;
+    assert_eq!(200, response.status());
+
+    mock_server.assert();
+
+    // Test forbidden IPv6
+    let mock_response = serde_json::json!([
+        {
+            "duration": "24h",
+            "id": 1,
+            "origin": "CAPI",
+            "scenario": "test",
+            "scope": "Ip",
+            "type": "ban",
+            "value": ip
+        }
+    ]);
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip.replace(':', "%3A")).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response.to_string())
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    let response = authenticate_none_mode(
+        TraefikHeaders { ip: ip.to_string() },
+        config.clone(),
+        health_status.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
     mock_server.assert();
 }
