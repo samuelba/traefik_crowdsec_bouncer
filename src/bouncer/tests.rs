@@ -530,3 +530,104 @@ async fn test_authenticate_none_mode() {
     // Clean up the mock server.
     mock_server.assert();
 }
+
+#[test]
+async fn test_authenticate_live_mode_caches_range() {
+    // Set up test data.
+    let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    })));
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+
+    let api_key = "my_api_key";
+    let ip_check = "10.0.0.1";
+    let ip_range = "10.0.0.0/24";
+
+    // Simulate a forbidden IP address range.
+    let mock_response = serde_json::json!([
+        {
+            "duration": "33h6m18.03174611s",
+            "id": 1,
+            "origin": "CAPI",
+            "scenario": "abc",
+            "scope": "Range",
+            "type": "ban",
+            "value": ip_range
+        }
+    ]);
+
+    let mut server = mockito::Server::new_async().await;
+    let mock_server = server
+        .mock("GET", "/v1/decisions")
+        .match_header("X-Api-Key", api_key)
+        .match_query(format!("ip={}&type=ban", ip_check).as_str())
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response.to_string())
+        .expect(1) // Should only be called once; second request should use cache
+        .create_async()
+        .await;
+
+    let config = Data::new(Config {
+        crowdsec_live_url: server.url() + "/v1/decisions",
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: api_key.to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    });
+
+    // Request for 10.0.0.1, should trigger API call and cache 10.0.0.0/24
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: ip_check.to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
+    mock_server.assert();
+
+    // Verify Cache contains the range
+    if let Ok(ipv4_table) = ipv4_data.lock() {
+        let res = ipv4_table.longest_match(Ipv4Addr::from_str("10.0.0.2").unwrap());
+        assert!(res.is_some(), "Should find a match for 10.0.0.2");
+        let (addr, mask, attr) = res.unwrap();
+        assert_eq!(addr, Ipv4Addr::from_str("10.0.0.0").unwrap());
+        assert_eq!(mask, 24);
+        assert_eq!(attr.allowed, false);
+    }
+
+    // Test that a second request for a different IP in the cached range uses the cache
+    // (no new mock is set up, so if it makes an API call, the test will fail)
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: "10.0.0.2".to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
+    // Verify health status is still true (would be false if API call failed)
+    if let Ok(health_data) = health_status.lock() {
+        assert!(
+            health_data.live_status,
+            "Health status should remain true since cache was used"
+        );
+    }
+
+    // Verify the mock was only called once
+    mock_server.assert();
+}
