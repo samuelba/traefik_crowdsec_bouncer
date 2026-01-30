@@ -11,6 +11,7 @@ actix-rt = { version = "2.11" }
 chrono = { version = "0.4", features = ["time"] }
 custom_error = { version = "1.9" }
 env_logger = { version = "0.11" }
+ipnetwork = "0.21"
 ip_network_table-deps-treebitmap = { version = "0.5" }
 log = { version = "0.4" }
 parse_duration = { version = "2.1" }
