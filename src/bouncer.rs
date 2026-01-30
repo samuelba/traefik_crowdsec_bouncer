@@ -115,11 +115,11 @@ pub async fn authenticate_live_mode(
     let req_ip = Ipv4Addr::from_str(&headers.ip);
     match req_ip {
         Ok(ip) => {
-            // Check if IP is in cache.
+            // Check if IP is in cache (including ranges).
             // If yes, check if it is expired.
             // If not, return the cached value.
             if let Ok(ipv4_table) = ipv4_data.lock()
-                && let Some(cache_attributes) = ipv4_table.exact_match(ip, 32)
+                && let Some((_addr, _mask, cache_attributes)) = ipv4_table.longest_match(ip)
                 && cache_attributes.expiration_time > chrono::Utc::now().timestamp_millis()
             {
                 return if cache_attributes.allowed {
@@ -152,9 +152,32 @@ pub async fn authenticate_live_mode(
 
                             // Update cache.
                             if let Ok(mut ipv4_table) = ipv4_data.lock() {
+                                let (cache_ip, cache_mask) = match crate::utils::get_ip_and_subnet(
+                                    &decision.value,
+                                ) {
+                                    Some(crate::utils::Address {
+                                        ipv4: Some(addr),
+                                        subnet,
+                                        ..
+                                    }) => (addr, subnet.unwrap_or(32)),
+                                    Some(crate::utils::Address { ipv6: Some(_), .. }) => {
+                                        warn!(
+                                            "CrowdSec returned IPv6 decision '{}' but only IPv4 is supported. Caching request IP {} instead.",
+                                            decision.value, headers.ip
+                                        );
+                                        (ip, 32)
+                                    }
+                                    None | Some(_) => {
+                                        warn!(
+                                            "Could not parse CrowdSec decision value '{}'. Caching request IP {} instead.",
+                                            decision.value, headers.ip
+                                        );
+                                        (ip, 32)
+                                    }
+                                };
                                 ipv4_table.insert(
-                                    ip,
-                                    32,
+                                    cache_ip,
+                                    cache_mask,
                                     CacheAttributes {
                                         allowed: false,
                                         expiration_time: chrono::Utc::now().timestamp_millis()
@@ -166,6 +189,7 @@ pub async fn authenticate_live_mode(
                         }
                         None => {
                             // Update cache.
+                            // No decision means no ban, so cache the request IP as allowed.
                             if let Ok(mut ipv4_table) = ipv4_data.lock() {
                                 ipv4_table.insert(
                                     ip,
