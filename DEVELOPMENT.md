@@ -59,6 +59,50 @@ Run Clippy to catch common mistakes and improve your code:
 cargo clippy
 ```
 
+## Code Coverage
+
+This project uses `cargo-llvm-cov` for generating code coverage reports.
+
+### Install cargo-llvm-cov
+
+```bash
+cargo install cargo-llvm-cov --locked
+```
+
+### Generate coverage report
+
+To run tests and generate a coverage report in terminal:
+
+```bash
+cargo llvm-cov
+```
+
+To generate an HTML report and open it in your browser:
+
+```bash
+cargo llvm-cov --open
+```
+
+To generate an lcov report for VS Code integration:
+
+```bash
+cargo llvm-cov --lcov --output-path lcov.info
+```
+
+### VS Code Coverage Visualization
+
+Install the [Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) extension, then:
+
+1. Generate the lcov report: `cargo llvm-cov --lcov --output-path lcov.info`
+2. Click the "Watch" button in the VS Code status bar to display coverage
+
+To automatically regenerate coverage on file changes (requires `cargo-watch`):
+
+```bash
+cargo install cargo-watch
+cargo watch -x 'llvm-cov --lcov --output-path lcov.info' -w src
+```
+
 ## Update Dependencies
 
 ```bash

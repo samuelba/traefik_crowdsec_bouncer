@@ -1,5 +1,6 @@
 ![GitHub](https://img.shields.io/github/license/samuelba/traefik_crowdsec_bouncer)
 [![ci](https://github.com/samuelba/traefik_crowdsec_bouncer/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelba/traefik_crowdsec_bouncer/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/samuelba/traefik_crowdsec_bouncer/branch/main/graph/badge.svg)](https://codecov.io/gh/samuelba/traefik_crowdsec_bouncer)
 ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/samuelba/traefik_crowdsec_bouncer)
 ![Docker Image Size (latest semver)](https://img.shields.io/docker/image-size/samuelba/traefik_crowdsec_bouncer)
 

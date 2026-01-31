@@ -1,0 +1,8 @@
+{
+  "coverage-gutters.lcovname": "lcov.info",
+  "coverage-gutters.showGutterCoverage": true,
+  "coverage-gutters.showLineCoverage": true,
+  "coverage-gutters.showRulerCoverage": true,
+  "coverage-gutters.highlightdark": "rgba(0, 255, 0, 0.2)",
+  "coverage-gutters.noHighlightDark": "rgba(255, 0, 0, 0.2)"
+}
