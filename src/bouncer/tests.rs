@@ -1203,3 +1203,176 @@ async fn test_authenticate_none_mode_ipv6() {
 
     mock_server.assert();
 }
+
+#[test]
+async fn test_block_list_stream_mode() {
+    // Set up test data for stream mode
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let mut ipv4_table = IpLookupTable::new();
+    ipv4_table.insert(
+        Ipv4Addr::from_str("192.168.0.1").unwrap(),
+        32,
+        CacheAttributes::new(false, 0),
+    );
+    ipv4_table.insert(
+        Ipv4Addr::from_str("10.0.0.1").unwrap(),
+        32,
+        CacheAttributes::new(false, 0),
+    );
+    let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
+
+    let mut ipv6_table = IpLookupTable::new();
+    ipv6_table.insert(
+        Ipv6Addr::from_str("2001:db8::1").unwrap(),
+        128,
+        CacheAttributes::new(false, 0),
+    );
+    let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
+
+    let response = get_block_list(&config, ipv4_data, ipv6_data).await;
+
+    assert_eq!(200, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("application/json"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let list: Vec<String> = serde_json::from_slice(&body).unwrap();
+
+    // Verify all IPs are in the list
+    assert_eq!(3, list.len());
+    assert!(list.contains(&"192.168.0.1".to_string()));
+    assert!(list.contains(&"10.0.0.1".to_string()));
+    assert!(list.contains(&"2001:db8::1".to_string()));
+}
+
+#[test]
+async fn test_block_list_stream_mode_empty() {
+    // Set up test data for stream mode with empty tables
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Stream,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    let response = get_block_list(&config, ipv4_data, ipv6_data).await;
+
+    assert_eq!(200, response.status());
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let list: Vec<String> = serde_json::from_slice(&body).unwrap();
+
+    // Verify list is empty
+    assert_eq!(0, list.len());
+}
+
+#[test]
+async fn test_block_list_live_mode() {
+    // Set up test data for live mode
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::Live,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    let response = get_block_list(&config, ipv4_data, ipv6_data).await;
+
+    assert_eq!(200, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("Only available in stream mode.", body_str);
+}
+
+#[test]
+async fn test_block_list_none_mode() {
+    // Set up test data for none mode
+    let config = Config {
+        crowdsec_live_url: "".to_string(),
+        crowdsec_stream_url: "".to_string(),
+        crowdsec_api_key: "".to_string(),
+        crowdsec_mode: CrowdSecMode::None,
+        crowdsec_cache_ttl: 60000,
+        stream_interval: 0,
+        port: 0,
+        trusted_proxies: vec![],
+    };
+
+    let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv4Addr,
+        CacheAttributes,
+    >::new())));
+    let ipv6_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
+        Ipv6Addr,
+        CacheAttributes,
+    >::new())));
+
+    let response = get_block_list(&config, ipv4_data, ipv6_data).await;
+
+    assert_eq!(200, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("Only available in stream mode.", body_str);
+}

@@ -389,9 +389,8 @@ pub async fn authenticate(
 /// * `ipv6_data` - The IPv6 lookup table.
 /// # Returns
 /// * `HttpResponse` - The HTTP response.
-#[get("/api/v1/blockList")]
-pub async fn block_list(
-    config: Data<Config>,
+pub async fn get_block_list(
+    config: &Config,
     ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
     ipv6_data: Data<Arc<Mutex<IpLookupTable<Ipv6Addr, CacheAttributes>>>>,
 ) -> HttpResponse {
@@ -441,6 +440,22 @@ pub async fn block_list(
             .content_type(TEXT_PLAIN)
             .body("Only available in stream mode."),
     }
+}
+
+/// Get the list of blocked IP addresses. This is only available in stream mode.
+/// # Arguments
+/// * `config` - The configuration.
+/// * `ipv4_data` - The IPv4 lookup table.
+/// * `ipv6_data` - The IPv6 lookup table.
+/// # Returns
+/// * `HttpResponse` - The HTTP response.
+#[get("/api/v1/blockList")]
+pub async fn block_list(
+    config: Data<Config>,
+    ipv4_data: Data<Arc<Mutex<IpLookupTable<Ipv4Addr, CacheAttributes>>>>,
+    ipv6_data: Data<Arc<Mutex<IpLookupTable<Ipv6Addr, CacheAttributes>>>>,
+) -> HttpResponse {
+    get_block_list(&config, ipv4_data, ipv6_data).await
 }
 
 /// Get the health status of the service.
