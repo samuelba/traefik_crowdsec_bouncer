@@ -266,15 +266,29 @@ pub async fn authenticate_live_mode(
 
                             // Update cache.
                             if let Ok(mut ipv6_table) = ipv6_data.lock() {
-                                let (cache_ip, cache_mask) =
-                                    match crate::utils::get_ip_and_subnet(&decision.value) {
-                                        Some(crate::utils::Address {
-                                            ipv6: Some(addr),
-                                            subnet,
-                                            ..
-                                        }) => (addr, subnet.unwrap_or(128)),
-                                        _ => (ip, 128),
-                                    };
+                                let (cache_ip, cache_mask) = match crate::utils::get_ip_and_subnet(
+                                    &decision.value,
+                                ) {
+                                    Some(crate::utils::Address {
+                                        ipv6: Some(addr),
+                                        subnet,
+                                        ..
+                                    }) => (addr, subnet.unwrap_or(128)),
+                                    Some(crate::utils::Address { ipv4: Some(_), .. }) => {
+                                        warn!(
+                                            "CrowdSec returned IPv4 decision '{}' but only IPv6 is supported. Caching request IP {} instead.",
+                                            decision.value, headers.ip
+                                        );
+                                        (ip, 128)
+                                    }
+                                    None | Some(_) => {
+                                        warn!(
+                                            "Could not parse CrowdSec decision value '{}'. Caching request IP {} instead.",
+                                            decision.value, headers.ip
+                                        );
+                                        (ip, 128)
+                                    }
+                                };
                                 ipv6_table.insert(
                                     cache_ip,
                                     cache_mask,
@@ -419,15 +433,9 @@ pub async fn block_list(
                 }
             }
 
-            if !list.is_empty() || ipv4_data.lock().is_ok() || ipv6_data.lock().is_ok() {
-                return HttpResponse::Ok()
-                    .content_type(APPLICATION_JSON)
-                    .json(&list);
-            }
-
-            HttpResponse::InternalServerError()
-                .content_type(TEXT_PLAIN)
-                .body("Could not generate the block list.")
+            HttpResponse::Ok()
+                .content_type(APPLICATION_JSON)
+                .json(&list)
         }
         CrowdSecMode::Live => HttpResponse::Ok()
             .content_type(TEXT_PLAIN)
