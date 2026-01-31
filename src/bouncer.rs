@@ -175,7 +175,7 @@ pub async fn authenticate_live_mode(
                                     }) => (addr, subnet.unwrap_or(32)),
                                     Some(crate::utils::Address { ipv6: Some(_), .. }) => {
                                         warn!(
-                                            "CrowdSec returned IPv6 decision '{}' but only IPv4 is supported. Caching request IP {} instead.",
+                                            "CrowdSec returned IPv6 decision '{}' for IPv4 request {}. Caching request IP instead.",
                                             decision.value, headers.ip
                                         );
                                         (ip, 32)
@@ -276,7 +276,7 @@ pub async fn authenticate_live_mode(
                                     }) => (addr, subnet.unwrap_or(128)),
                                     Some(crate::utils::Address { ipv4: Some(_), .. }) => {
                                         warn!(
-                                            "CrowdSec returned IPv4 decision '{}' but only IPv6 is supported. Caching request IP {} instead.",
+                                            "CrowdSec returned IPv4 decision '{}' for IPv6 request {}. Caching request IP instead.",
                                             decision.value, headers.ip
                                         );
                                         (ip, 128)
@@ -418,19 +418,34 @@ pub async fn block_list(
             let mut list: Vec<String> = Vec::new();
 
             // Add IPv4 addresses
-            if let Ok(ipv4_table) = ipv4_data.lock() {
-                let iter = ipv4_table.iter();
-                for (ip, _, _) in iter {
-                    list.push(format!("{}", ip));
+            let ipv4_table = match ipv4_data.lock() {
+                Ok(table) => table,
+                Err(_) => {
+                    warn!("Could not lock the IPv4 lookup table for block list.");
+                    return HttpResponse::InternalServerError()
+                        .content_type(TEXT_PLAIN)
+                        .body("Failed to acquire lock");
                 }
+            };
+
+            for (ip, _, _) in ipv4_table.iter() {
+                list.push(format!("{}", ip));
             }
+            drop(ipv4_table);
 
             // Add IPv6 addresses
-            if let Ok(ipv6_table) = ipv6_data.lock() {
-                let iter = ipv6_table.iter();
-                for (ip, _, _) in iter {
-                    list.push(format!("{}", ip));
+            let ipv6_table = match ipv6_data.lock() {
+                Ok(table) => table,
+                Err(_) => {
+                    warn!("Could not lock the IPv6 lookup table for block list.");
+                    return HttpResponse::InternalServerError()
+                        .content_type(TEXT_PLAIN)
+                        .body("Failed to acquire lock");
                 }
+            };
+
+            for (ip, _, _) in ipv6_table.iter() {
+                list.push(format!("{}", ip));
             }
 
             HttpResponse::Ok()
