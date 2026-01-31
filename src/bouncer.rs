@@ -229,11 +229,11 @@ pub async fn authenticate_live_mode(
             };
         }
         Ok(IpAddr::V6(ip)) => {
-            // Check if IP is in cache.
+            // Check if IP is in cache (including ranges).
             // If yes, check if it is expired.
             // If not, return the cached value.
             if let Ok(ipv6_table) = ipv6_data.lock()
-                && let Some(cache_attributes) = ipv6_table.exact_match(ip, 128)
+                && let Some((_addr, _mask, cache_attributes)) = ipv6_table.longest_match(ip)
                 && cache_attributes.expiration_time > chrono::Utc::now().timestamp_millis()
             {
                 return if cache_attributes.allowed {

@@ -627,6 +627,13 @@ async fn test_authenticate_live_mode_caches_range() {
         assert_eq!(addr, Ipv4Addr::from_str("10.0.0.0").unwrap());
         assert_eq!(mask, 24);
         assert_eq!(attr.allowed, false);
+
+        // Verify exact_match would fail to find IPs in the range (proving longest_match is needed)
+        let exact_res = ipv4_table.exact_match(Ipv4Addr::from_str("10.0.0.2").unwrap(), 32);
+        assert!(
+            exact_res.is_none(),
+            "exact_match should NOT find IPs in range, only exact /32 matches"
+        );
     }
 
     // Test that a second request for a different IP in the cached range uses the cache
@@ -932,9 +939,10 @@ async fn test_authenticate_live_mode_ipv6_from_api() {
 
     // Verify it was cached as allowed
     if let Ok(ipv6_table) = ipv6_data.lock() {
-        let res = ipv6_table.exact_match(Ipv6Addr::from_str("2001:db8::1").unwrap(), 128);
+        let res = ipv6_table.longest_match(Ipv6Addr::from_str("2001:db8::1").unwrap());
         assert!(res.is_some());
-        assert!(res.unwrap().allowed);
+        let (_addr, _mask, cache_attributes) = res.unwrap();
+        assert!(cache_attributes.allowed);
     }
 
     mock_server.assert();
@@ -985,9 +993,10 @@ async fn test_authenticate_live_mode_ipv6_from_api() {
 
     // Verify it was cached as forbidden
     if let Ok(ipv6_table) = ipv6_data.lock() {
-        let res = ipv6_table.exact_match(Ipv6Addr::from_str("2001:db8::bad").unwrap(), 128);
+        let res = ipv6_table.longest_match(Ipv6Addr::from_str("2001:db8::bad").unwrap());
         assert!(res.is_some());
-        assert!(!res.unwrap().allowed);
+        let (_addr, _mask, cache_attributes) = res.unwrap();
+        assert!(!cache_attributes.allowed);
     }
 
     mock_server.assert();
@@ -1033,6 +1042,7 @@ async fn test_authenticate_live_mode_ipv6_caches_range() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(mock_response.to_string())
+        .expect(1) // Should only be called once; second request should use cache
         .create_async()
         .await;
 
@@ -1070,7 +1080,40 @@ async fn test_authenticate_live_mode_ipv6_caches_range() {
         assert_eq!(addr, Ipv6Addr::from_str("2001:db8:abcd::").unwrap());
         assert_eq!(mask, 48);
         assert_eq!(attr.allowed, false);
+
+        // Verify exact_match would fail to find IPs in the range (proving longest_match is needed)
+        let exact_res =
+            ipv6_table.exact_match(Ipv6Addr::from_str("2001:db8:abcd::ffff").unwrap(), 128);
+        assert!(
+            exact_res.is_none(),
+            "exact_match should NOT find IPs in range, only exact /128 matches"
+        );
     }
+
+    // Test that a second request for a different IP in the cached range uses the cache
+    // (no new mock is set up, so if it makes an API call, the test will fail)
+    let response = authenticate_live_mode(
+        TraefikHeaders {
+            ip: "2001:db8:abcd::ffff".to_string(),
+        },
+        config.clone(),
+        health_status.clone(),
+        ipv4_data.clone(),
+        ipv6_data.clone(),
+    )
+    .await;
+    assert_eq!(403, response.status());
+
+    // Verify health status is still true (would be false if API call failed)
+    if let Ok(health_data) = health_status.lock() {
+        assert!(
+            health_data.live_status,
+            "Health status should remain true since cache was used"
+        );
+    }
+
+    // Verify the mock was only called once
+    mock_server.assert();
 }
 
 #[test]
