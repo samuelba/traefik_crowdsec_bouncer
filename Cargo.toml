@@ -5,6 +5,14 @@ edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "traefik_crowdsec_bouncer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "traefik_crowdsec_bouncer"
+path = "src/main.rs"
+
 [dependencies]
 actix-web = { version = "4.12" }
 actix-rt = { version = "2.11" }
@@ -22,3 +30,9 @@ url = { version = "2.5" }
 
 [dev-dependencies]
 mockito = { version = "1.7" }
+criterion = { version = "0.5", features = ["async_tokio"] }
+tokio = { version = "1", features = ["full"] }
+
+[[bench]]
+name = "authentication"
+harness = false

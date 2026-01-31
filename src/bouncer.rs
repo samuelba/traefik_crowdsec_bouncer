@@ -22,7 +22,7 @@ use crate::types::{CacheAttributes, HealthStatus};
 mod tests;
 
 pub struct TraefikHeaders {
-    ip: String,
+    pub ip: String,
 }
 
 /// Trait for abstracting over IPv4 and IPv6 address handling
