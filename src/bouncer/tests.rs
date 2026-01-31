@@ -1376,3 +1376,99 @@ async fn test_block_list_none_mode() {
 
     assert_eq!("Only available in stream mode.", body_str);
 }
+
+#[test]
+async fn test_health_endpoint_healthy() {
+    let health_status = Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: true,
+    }));
+
+    let response = get_health(&health_status).await;
+
+    assert_eq!(200, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("OK", body_str);
+}
+
+#[test]
+async fn test_health_endpoint_unhealthy_live() {
+    let health_status = Arc::new(Mutex::new(HealthStatus {
+        live_status: false,
+        stream_status: true,
+    }));
+
+    let response = get_health(&health_status).await;
+
+    assert_eq!(503, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("NOT OK", body_str);
+}
+
+#[test]
+async fn test_health_endpoint_unhealthy_stream() {
+    let health_status = Arc::new(Mutex::new(HealthStatus {
+        live_status: true,
+        stream_status: false,
+    }));
+
+    let response = get_health(&health_status).await;
+
+    assert_eq!(503, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("NOT OK", body_str);
+}
+
+#[test]
+async fn test_health_endpoint_unhealthy_both() {
+    let health_status = Arc::new(Mutex::new(HealthStatus {
+        live_status: false,
+        stream_status: false,
+    }));
+
+    let response = get_health(&health_status).await;
+
+    assert_eq!(503, response.status());
+
+    // Check content type
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap();
+    assert!(content_type.to_str().unwrap().contains("text/plain"));
+
+    // Parse response body
+    let body = actix_web::body::to_bytes(response.into_body())
+        .await
+        .unwrap();
+    let body_str = std::str::from_utf8(&body).unwrap();
+
+    assert_eq!("NOT OK", body_str);
+}

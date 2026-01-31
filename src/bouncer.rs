@@ -463,8 +463,7 @@ pub async fn block_list(
 /// * `health_status` - The health status.
 /// # Returns
 /// * `HttpResponse` - The HTTP response.
-#[get("/api/v1/health")]
-pub async fn health(health_status: Data<Arc<Mutex<HealthStatus>>>) -> HttpResponse {
+pub async fn get_health(health_status: &Arc<Mutex<HealthStatus>>) -> HttpResponse {
     if let Ok(health_status) = health_status.lock()
         && health_status.healthy()
     {
@@ -473,4 +472,14 @@ pub async fn health(health_status: Data<Arc<Mutex<HealthStatus>>>) -> HttpRespon
     HttpResponse::ServiceUnavailable()
         .content_type(TEXT_PLAIN)
         .body("NOT OK")
+}
+
+/// Get the health status of the service.
+/// # Arguments
+/// * `health_status` - The health status.
+/// # Returns
+/// * `HttpResponse` - The HTTP response.
+#[get("/api/v1/health")]
+pub async fn health(health_status: Data<Arc<Mutex<HealthStatus>>>) -> HttpResponse {
+    get_health(&health_status).await
 }
