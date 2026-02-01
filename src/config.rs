@@ -27,6 +27,8 @@ pub struct Config {
     pub port: u16,
     /// The trusted proxies.
     pub trusted_proxies: Vec<ipnetwork::IpNetwork>,
+    /// The log level.
+    pub log_level: String,
 }
 
 /// Read the configuration from the environment variables.
@@ -42,6 +44,7 @@ pub fn read_config() -> Config {
         stream_interval: 0,
         port: 8080,
         trusted_proxies: Vec::new(),
+        log_level: String::from("warning"),
     };
 
     // Get the CrowdSec mode.
@@ -122,6 +125,22 @@ pub fn read_config() -> Config {
                 .expect("Invalid CIDR in CROWDSEC_TRUSTED_PROXIES")
         })
         .collect();
-
+    // Get the log level.
+    config.log_level = match env::var("LOG_LEVEL") {
+        Ok(val) => {
+            let level = val.to_lowercase();
+            match level.as_str() {
+                "debug" | "info" | "warning" | "error" => level,
+                _ => {
+                    eprintln!(
+                        "Invalid LOG_LEVEL '{}'. Using default 'warning'. Valid values: debug, info, warning, error",
+                        val
+                    );
+                    String::from("warning")
+                }
+            }
+        }
+        Err(_) => String::from("warning"),
+    };
     config
 }

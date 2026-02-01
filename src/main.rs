@@ -24,14 +24,20 @@ use crate::types::CacheAttributes;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
+    info!("Reading configuration.");
+    let config = config::read_config();
+
     unsafe {
-        env::set_var("RUST_LOG", "info,actix_web=info,actix_server=info");
+        env::set_var(
+            "RUST_LOG",
+            format!(
+                "{},actix_web={},actix_server={}",
+                config.log_level, config.log_level, config.log_level
+            ),
+        );
     }
     env_logger::init();
     info!("Starting Bouncer.");
-
-    info!("Reading configuration.");
-    let config = config::read_config();
     let config_clone = config.clone();
 
     let health_status = Arc::new(Mutex::new(HealthStatus::new()));
