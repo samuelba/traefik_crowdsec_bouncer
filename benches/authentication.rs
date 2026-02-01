@@ -20,6 +20,7 @@ fn create_test_config(mode: CrowdSecMode) -> Config {
         stream_interval: 10,
         port: 8080,
         trusted_proxies: Vec::new(),
+        log_level: String::from("warn"),
     }
 }
 
