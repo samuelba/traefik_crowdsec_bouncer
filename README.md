@@ -59,8 +59,8 @@ services:
       - LIVE_CACHE_EXPIRATION=5
       # The port the service should listen on. Default is 8080.
       - PORT=8080
-      # The log level. Can be either "debug", "info", "warning" or "error". Default is "warning".
-      - LOG_LEVEL=warning
+      # The log level. Can be either "debug", "info", "warn" or "error". Default is "warn".
+      - LOG_LEVEL=warn
 ```
 
 ## Configuration
@@ -77,7 +77,7 @@ The service can be configured with the following environment variables:
 | `STREAM_UPDATE_INTERVAL` | The interval in seconds to fetch the list of blocked IP addresses from the CrowdSec API. Only needed in "stream" mode. | 0 |
 | `LIVE_CACHE_EXPIRATION` | The cache expiration time in seconds. Only needed in "live" mode. | 0 |
 | `PORT` | The port the service should listen on. | 8080 |
-| `LOG_LEVEL` | The log level. Can be either "debug", "info", "warning" or "error". | warning |
+| `LOG_LEVEL` | The log level. Can be either "debug", "info", "warn" or "error". | warn |
 
 ## Token Generation
 

@@ -44,7 +44,7 @@ pub fn read_config() -> Config {
         stream_interval: 0,
         port: 8080,
         trusted_proxies: Vec::new(),
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // Get the CrowdSec mode.
@@ -130,17 +130,17 @@ pub fn read_config() -> Config {
         Ok(val) => {
             let level = val.to_lowercase();
             match level.as_str() {
-                "debug" | "info" | "warning" | "error" => level,
+                "debug" | "info" | "warn" | "error" => level,
                 _ => {
                     eprintln!(
-                        "Invalid LOG_LEVEL '{}'. Using default 'warning'. Valid values: debug, info, warning, error",
+                        "Invalid LOG_LEVEL '{}'. Using default 'warn'. Valid values: debug, info, warn, error",
                         val
                     );
-                    String::from("warning")
+                    String::from("warn")
                 }
             }
         }
-        Err(_) => String::from("warning"),
+        Err(_) => String::from("warn"),
     };
     config
 }

@@ -56,7 +56,7 @@ fn create_test_config(mode: CrowdSecMode) -> Config {
         stream_interval: 10,
         port: 0, // Let OS assign a free port
         trusted_proxies: Vec::new(),
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     }
 }
 

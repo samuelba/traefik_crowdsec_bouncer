@@ -44,7 +44,7 @@ async fn test_read_config_stream_mode() {
     assert_eq!(config.stream_interval, 10);
     assert_eq!(config.crowdsec_cache_ttl, 0);
     assert_eq!(config.port, 8080);
-    assert_eq!(config.log_level, "warning");
+    assert_eq!(config.log_level, "warn");
     assert!(config.crowdsec_live_url.contains("http://localhost:8080"));
     assert!(config.crowdsec_stream_url.contains("http://localhost:8080"));
 
@@ -140,7 +140,7 @@ async fn test_read_config_with_trusted_proxies() {
 #[test]
 #[serial]
 async fn test_read_config_with_log_levels() {
-    let log_levels = vec!["debug", "info", "warning", "error"];
+    let log_levels = vec!["debug", "info", "warn", "error"];
 
     for level in log_levels {
         cleanup_env();
@@ -168,7 +168,7 @@ async fn test_read_config_with_invalid_log_level() {
 
     let config = read_config();
 
-    assert_eq!(config.log_level, "warning");
+    assert_eq!(config.log_level, "warn");
 
     cleanup_env();
 }

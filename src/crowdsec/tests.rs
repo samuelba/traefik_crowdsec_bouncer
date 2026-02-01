@@ -230,7 +230,7 @@ async fn test_update_decisions() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
     let health_status = Arc::new(Mutex::new(HealthStatus::new()));
     let ipv4_table = Arc::new(Mutex::new(IpLookupTable::new()));

@@ -17,7 +17,7 @@ async fn test_extract_headers() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let headers = extract_headers(&req, &config).unwrap();
@@ -38,7 +38,7 @@ async fn test_extract_headers_missing_headers() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     assert!(extract_headers(&req, &config).is_err());
@@ -62,7 +62,7 @@ async fn test_extract_headers_invalid_headers() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     assert!(extract_headers(&req, &config).is_err());
@@ -83,7 +83,7 @@ async fn test_extract_headers_multiple_ips() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // No trusted proxies, so we take the "untrusted" one from the right, which is the last one (5.6.7.8)
@@ -108,7 +108,7 @@ async fn test_extract_headers_multiple_ips_with_spaces() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let headers = extract_headers(&req, &config).unwrap();
@@ -130,7 +130,7 @@ async fn test_extract_headers_trusted_proxy() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec!["10.0.0.1/32".parse().unwrap()],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // 10.0.0.1 is trusted. Logic:
@@ -155,7 +155,7 @@ async fn test_extract_headers_garbage_in_chain() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec!["10.0.0.1/32".parse().unwrap()],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // 10.0.0.1 is trusted.
@@ -185,7 +185,7 @@ async fn test_extract_headers_all_trusted_proxies() {
             "192.168.1.0/24".parse().unwrap(),
             "10.0.0.0/24".parse().unwrap(),
         ],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // All IPs are trusted proxies.
@@ -265,7 +265,7 @@ async fn test_authenticate_live_mode_from_cache() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
     let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
         live_status: true,
@@ -377,7 +377,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Allowed IP.
@@ -444,7 +444,7 @@ async fn test_authenticate_live_mode_from_api_allowed() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Blocked IP.
@@ -498,7 +498,7 @@ async fn test_authenticate_none_mode() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
         trusted_proxies: vec![],
     });
 
@@ -544,7 +544,7 @@ async fn test_authenticate_none_mode() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
         trusted_proxies: vec![],
     });
 
@@ -615,7 +615,7 @@ async fn test_authenticate_live_mode_caches_range() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Request for 10.0.0.1, should trigger API call and cache 10.0.0.0/24
@@ -694,7 +694,7 @@ async fn test_extract_headers_ipv6_single() {
         crowdsec_cache_ttl: 0,
         stream_interval: 0,
         port: 0,
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
         trusted_proxies: vec![],
     };
 
@@ -717,7 +717,7 @@ async fn test_extract_headers_ipv6_multiple() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // No trusted proxies, so we take the rightmost (last untrusted) IP
@@ -740,7 +740,7 @@ async fn test_extract_headers_ipv6_with_trusted_proxy() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec!["2001:db8:abcd::/48".parse().unwrap()],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // 2001:db8:abcd::1 is trusted, so we get 2001:db8::1 as the client IP
@@ -763,7 +763,7 @@ async fn test_extract_headers_mixed_ipv4_ipv6() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     // No trusted proxies, so we get the rightmost IP
@@ -840,7 +840,7 @@ async fn test_authenticate_live_mode_ipv6_from_cache() {
         crowdsec_cache_ttl: 60000,
         stream_interval: 0,
         port: 0,
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
         trusted_proxies: vec![],
     });
     let health_status = Data::new(Arc::new(Mutex::new(HealthStatus {
@@ -943,7 +943,7 @@ async fn test_authenticate_live_mode_ipv6_from_api() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Allowed IPv6
@@ -999,7 +999,7 @@ async fn test_authenticate_live_mode_ipv6_from_api() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     let response = authenticate_live_mode(
@@ -1076,7 +1076,7 @@ async fn test_authenticate_live_mode_ipv6_caches_range() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Request for 2001:db8:abcd::1, should trigger API call and cache 2001:db8:abcd::/48
@@ -1169,7 +1169,7 @@ async fn test_authenticate_none_mode_ipv6() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     // Allowed IPv6
@@ -1214,7 +1214,7 @@ async fn test_authenticate_none_mode_ipv6() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     });
 
     let response = authenticate_none_mode(
@@ -1240,7 +1240,7 @@ async fn test_block_list_stream_mode() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let mut ipv4_table = IpLookupTable::new();
@@ -1297,7 +1297,7 @@ async fn test_block_list_stream_mode_empty() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
@@ -1335,7 +1335,7 @@ async fn test_block_list_live_mode() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
@@ -1376,7 +1376,7 @@ async fn test_block_list_none_mode() {
         stream_interval: 0,
         port: 0,
         trusted_proxies: vec![],
-        log_level: String::from("warning"),
+        log_level: String::from("warn"),
     };
 
     let ipv4_data = Data::new(Arc::new(Mutex::new(IpLookupTable::<
