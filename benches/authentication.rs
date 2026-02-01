@@ -1,11 +1,11 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 
 use actix_web::web::Data;
 use ip_network_table_deps_treebitmap::IpLookupTable;
 
-use traefik_crowdsec_bouncer::bouncer::{authenticate_stream_mode, TraefikHeaders};
+use traefik_crowdsec_bouncer::bouncer::{TraefikHeaders, authenticate_stream_mode};
 use traefik_crowdsec_bouncer::config::{Config, CrowdSecMode};
 use traefik_crowdsec_bouncer::types::CacheAttributes;
 
@@ -20,6 +20,7 @@ fn create_test_config(mode: CrowdSecMode) -> Config {
         stream_interval: 10,
         port: 8080,
         trusted_proxies: Vec::new(),
+        log_level: String::from("warn"),
     }
 }
 
@@ -79,129 +80,129 @@ fn populate_ipv6_cache(
 
 fn bench_stream_mode_ipv4_blocked(c: &mut Criterion) {
     let mut group = c.benchmark_group("stream_mode_ipv4");
-    
+
     for size in [100, 1000, 10000].iter() {
         group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::new("blocked", size), size, |b, &size| {
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            
+
             b.to_async(&runtime).iter(|| async {
                 // Setup - create lookup tables with blocked IPs
                 let mut ipv4_table = IpLookupTable::new();
                 populate_ipv4_cache(&mut ipv4_table, size, false);
                 let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
-                
+
                 let ipv6_table = IpLookupTable::new();
                 let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
-                
+
                 // Test with a blocked IP
                 let headers = TraefikHeaders {
                     ip: "10.0.0.1".to_string(),
                 };
-                
+
                 black_box(
-                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await
+                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await,
                 )
             });
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_stream_mode_ipv4_allowed(c: &mut Criterion) {
     let mut group = c.benchmark_group("stream_mode_ipv4");
-    
+
     for size in [100, 1000, 10000].iter() {
         group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::new("allowed", size), size, |b, &size| {
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            
+
             b.to_async(&runtime).iter(|| async {
                 // Setup - create lookup tables with some blocked IPs
                 let mut ipv4_table = IpLookupTable::new();
                 populate_ipv4_cache(&mut ipv4_table, size, false);
                 let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
-                
+
                 let ipv6_table = IpLookupTable::new();
                 let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
-                
+
                 // Test with an allowed IP (not in block list)
                 let headers = TraefikHeaders {
                     ip: "192.168.1.1".to_string(),
                 };
-                
+
                 black_box(
-                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await
+                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await,
                 )
             });
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_stream_mode_ipv6_blocked(c: &mut Criterion) {
     let mut group = c.benchmark_group("stream_mode_ipv6");
-    
+
     for size in [100, 1000, 10000].iter() {
         group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::new("blocked", size), size, |b, &size| {
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            
+
             b.to_async(&runtime).iter(|| async {
                 // Setup - create lookup tables with blocked IPs
                 let ipv4_table = IpLookupTable::new();
                 let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
-                
+
                 let mut ipv6_table = IpLookupTable::new();
                 populate_ipv6_cache(&mut ipv6_table, size, false);
                 let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
-                
+
                 // Test with a blocked IP
                 let headers = TraefikHeaders {
                     ip: "2001:db8::1".to_string(),
                 };
-                
+
                 black_box(
-                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await
+                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await,
                 )
             });
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_stream_mode_ipv6_allowed(c: &mut Criterion) {
     let mut group = c.benchmark_group("stream_mode_ipv6");
-    
+
     for size in [100, 1000, 10000].iter() {
         group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::new("allowed", size), size, |b, &size| {
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            
+
             b.to_async(&runtime).iter(|| async {
                 // Setup - create lookup tables with blocked IPs
                 let ipv4_table = IpLookupTable::new();
                 let ipv4_data = Data::new(Arc::new(Mutex::new(ipv4_table)));
-                
+
                 let mut ipv6_table = IpLookupTable::new();
                 populate_ipv6_cache(&mut ipv6_table, size, false);
                 let ipv6_data = Data::new(Arc::new(Mutex::new(ipv6_table)));
-                
+
                 // Test with an allowed IP (not in block list)
                 let headers = TraefikHeaders {
                     ip: "2001:db8:1::1".to_string(),
                 };
-                
+
                 black_box(
-                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await
+                    authenticate_stream_mode(headers, ipv4_data.clone(), ipv6_data.clone()).await,
                 )
             });
         });
     }
-    
+
     group.finish();
 }
 

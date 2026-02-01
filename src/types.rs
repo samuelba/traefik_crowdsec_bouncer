@@ -21,6 +21,12 @@ pub struct HealthStatus {
     pub stream_status: bool,
 }
 
+impl Default for HealthStatus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HealthStatus {
     pub fn new() -> HealthStatus {
         HealthStatus {

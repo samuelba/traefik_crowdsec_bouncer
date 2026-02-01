@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use ip_network_table_deps_treebitmap::IpLookupTable;
 
 use traefik_crowdsec_bouncer::bouncer::{authenticate, block_list, health};
@@ -20,9 +20,9 @@ struct BenchmarkConfig {
 
 #[derive(Debug, Clone)]
 enum CacheScenario {
-    ColdCache,      // No cache entries, all misses
-    WarmCache,      // All requests hit cache
-    MixedCache,     // 80% hits, 20% misses
+    ColdCache,  // No cache entries, all misses
+    WarmCache,  // All requests hit cache
+    MixedCache, // 80% hits, 20% misses
 }
 
 #[derive(Debug, Clone)]
@@ -54,8 +54,9 @@ fn create_test_config(mode: CrowdSecMode) -> Config {
         crowdsec_mode: mode,
         crowdsec_cache_ttl: 60000,
         stream_interval: 10,
-        port: 0,  // Let OS assign a free port
+        port: 0, // Let OS assign a free port
         trusted_proxies: Vec::new(),
+        log_level: String::from("warn"),
     }
 }
 
@@ -130,7 +131,7 @@ async fn setup_test_server(
             .service(health)
     })
     .bind(("127.0.0.1", config.port))?;
-    
+
     let port = server.addrs()[0].port();
     let server = server.run();
 
@@ -170,7 +171,7 @@ async fn run_benchmark(bench_config: BenchmarkConfig) -> BenchmarkResult {
     let (server, port) = setup_test_server(config, ipv4_data.clone(), ipv6_data.clone())
         .await
         .expect("Failed to start server");
-    
+
     let server_handle = tokio::spawn(server);
 
     // Give server time to start
@@ -181,40 +182,22 @@ async fn run_benchmark(bench_config: BenchmarkConfig) -> BenchmarkResult {
     let start = Instant::now();
 
     let client = reqwest::Client::new();
-    
+
     for i in 0..bench_config.num_requests {
         let ip = match bench_config.ip_version {
-            IpVersion::IPv4 => format!(
-                "10.{}.{}.{}",
-                (i >> 16) & 0xFF,
-                (i >> 8) & 0xFF,
-                i & 0xFF
-            ),
-            IpVersion::IPv6 => format!(
-                "2001:db8:{}:{}::1",
-                (i >> 16) & 0xFFFF,
-                i & 0xFFFF
-            ),
+            IpVersion::IPv4 => format!("10.{}.{}.{}", (i >> 16) & 0xFF, (i >> 8) & 0xFF, i & 0xFF),
+            IpVersion::IPv6 => format!("2001:db8:{}:{}::1", (i >> 16) & 0xFFFF, i & 0xFFFF),
             IpVersion::Mixed => {
                 if i % 2 == 0 {
-                    format!(
-                        "10.{}.{}.{}",
-                        (i >> 16) & 0xFF,
-                        (i >> 8) & 0xFF,
-                        i & 0xFF
-                    )
+                    format!("10.{}.{}.{}", (i >> 16) & 0xFF, (i >> 8) & 0xFF, i & 0xFF)
                 } else {
-                    format!(
-                        "2001:db8:{}:{}::1",
-                        (i >> 16) & 0xFFFF,
-                        i & 0xFFFF
-                    )
+                    format!("2001:db8:{}:{}::1", (i >> 16) & 0xFFFF, i & 0xFFFF)
                 }
             }
         };
 
         let request_start = Instant::now();
-        
+
         let response = client
             .get(format!("http://127.0.0.1:{}/api/v1/forwardAuth", port))
             .header("X-Forwarded-For", &ip)
@@ -265,8 +248,10 @@ fn print_results(results: &[BenchmarkResult]) {
     println!("============================================================================\n");
 
     for result in results {
-        println!("Mode: {} | Scenario: {} | IP Version: {}", 
-                 result.mode, result.scenario, result.ip_version);
+        println!(
+            "Mode: {} | Scenario: {} | IP Version: {}",
+            result.mode, result.scenario, result.ip_version
+        );
         println!("  Total Requests:      {}", result.total_requests);
         println!("  Duration:            {:.2?}", result.duration);
         println!("  Requests/sec:        {:.2}", result.requests_per_second);
@@ -345,7 +330,7 @@ async fn main() {
         println!("Running test {}/{}...", idx + 1, test_configs.len());
         let result = run_benchmark(config.clone()).await;
         results.push(result);
-        
+
         // Small delay between tests
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
