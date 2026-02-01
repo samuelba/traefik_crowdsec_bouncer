@@ -144,3 +144,6 @@ pub fn read_config() -> Config {
     };
     config
 }
+
+#[cfg(test)]
+mod tests;
