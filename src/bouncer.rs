@@ -10,13 +10,12 @@ use actix_web::{HttpRequest, HttpResponse};
 
 use ip_network_table_deps_treebitmap::{IpLookupTable, address::Address};
 
-use parse_duration::parse;
-
 use crate::config::{Config, CrowdSecMode};
 use crate::constants::{APPLICATION_JSON, TEXT_PLAIN};
 use crate::crowdsec::get_decision;
 use crate::errors::TraefikError;
 use crate::types::{CacheAttributes, HealthStatus};
+use crate::utils::parse_crowdsec_duration;
 
 #[cfg(test)]
 mod tests;
@@ -162,8 +161,9 @@ where
             match decision {
                 Some(decision) => {
                     // If the decisions duration is smaller than the cache TTL, use it instead.
-                    let ttl = if let Ok(duration) = parse(&decision.duration) {
-                        min(duration.as_millis() as i64, config.crowdsec_cache_ttl)
+                    let ttl = if let Some(duration) = parse_crowdsec_duration(&decision.duration) {
+                        let millis = i64::try_from(duration.as_millis()).unwrap_or(i64::MAX);
+                        min(millis, config.crowdsec_cache_ttl)
                     } else {
                         config.crowdsec_cache_ttl
                     };
