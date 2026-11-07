@@ -19,7 +19,7 @@ RUN cargo build --release
 FROM gcr.io/distroless/cc-debian13:nonroot
 
 COPY --from=builder --chown=nonroot:nonroot /traefik_crowdsec_bouncer/target/release/traefik_crowdsec_bouncer /app/traefik_crowdsec_bouncer
-COPY --from=samuelba/healthcheck:v0.2.0 --chown=nonroot:nonroot /app/healthcheck /app/healthcheck
+COPY --from=ghcr.io/samuelba/healthcheck:v0.2.1 --chown=nonroot:nonroot /app/healthcheck /app/healthcheck
 USER nonroot
 WORKDIR /app
 
