@@ -3,6 +3,7 @@
 [![codecov](https://codecov.io/gh/samuelba/traefik_crowdsec_bouncer/branch/main/graph/badge.svg)](https://codecov.io/gh/samuelba/traefik_crowdsec_bouncer)
 ![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/samuelba/traefik_crowdsec_bouncer)
 [![Container image](https://img.shields.io/badge/ghcr.io-samuelba%2Ftraefik__crowdsec__bouncer-blue?logo=docker)](https://github.com/samuelba/traefik_crowdsec_bouncer/pkgs/container/traefik_crowdsec_bouncer)
+[![Docker Image Size (latest semver)](https://img.shields.io/docker/image-size/samuelba/traefik_crowdsec_bouncer)](https://hub.docker.com/r/samuelba/traefik_crowdsec_bouncer)
 
 # Traefik CrowdSec Bouncer
 
@@ -35,6 +36,9 @@ services:
 
     # Use the image from the GitHub Container Registry.
     # image: ghcr.io/samuelba/traefik_crowdsec_bouncer:latest
+
+    # Or use the image from Docker Hub.
+    # image: samuelba/traefik_crowdsec_bouncer:latest
 
     container_name: traefik-crowdsec-bouncers
     restart: unless-stopped
